@@ -145,6 +145,24 @@ public class MotorDeAcionamento implements Auditavel {
     public boolean precisaManutencao() {
         return estaQuebrado() || estaSuperaquecido() || desgaste >= LIMITE_MANUTENCAO;
     }
+    /**
+    * Restaura a temperatura e o desgaste do motor.
+    *
+    * @param temperatura temperatura recuperada do XML
+    * @param desgaste desgaste recuperado do XML
+    * @throws EntradaInvalidaException se os valores forem inválidos
+    */
+    public void restaurarEstado(double temperatura, double desgaste) {
+        if (!Double.isFinite(temperatura) || !Double.isFinite(desgaste) || temperatura < 25.0 || temperatura > 120.0 || desgaste < 0.0 || desgaste > 100.0) {
+
+        throw new EntradaInvalidaException(
+            "Estado inválido do motor."
+        );
+    }
+
+        this.temperatura = temperatura;
+        this.desgaste = desgaste;
+    }
 
     /**
     * Retorna o desgaste atual do motor.

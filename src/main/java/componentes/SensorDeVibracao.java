@@ -95,4 +95,18 @@ public class SensorDeVibracao implements Auditavel {
     public boolean precisaManutencao() {
         return estaDescalibrado();
     }
+    /**
+    * Restaura a calibração do sensor.
+    *
+    * @param calibracao calibração recuperada do XML
+     * @throws EntradaInvalidaException se o valor for inválido
+     */
+    public void restaurarEstado(double calibracao) {
+        if (!Double.isFinite(calibracao) || calibracao < 0.0 || calibracao > 100.0) {
+
+            throw new EntradaInvalidaException( "Calibração inválida do sensor.");
+    }
+
+    this.calibracao = calibracao;
+    }
 }

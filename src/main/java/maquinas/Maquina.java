@@ -538,4 +538,57 @@ public abstract class Maquina implements Auditavel {
     public double getProbabilidadeFalhaBase() {
         return probabilidadeFalha;
     }
+
+    /**
+ * Restaura o estado da máquina e de seus componentes internos.
+ *
+ * @param saude saúde recuperada do XML
+ * @param historicoFalhas quantidade de falhas registradas
+ * @param temperaturaMotor temperatura do motor
+ * @param desgasteMotor desgaste do motor
+ * @param calibracaoSensor calibração do sensor
+ * @param estadosFerramentas estados das ferramentas
+ * @throws EntradaInvalidaException se algum dado for inválido
+ */
+    public void restaurarEstado(
+        double saude,
+        int historicoFalhas,
+        double temperaturaMotor,
+        double desgasteMotor,
+        double calibracaoSensor,
+        List<EstadoFerramenta> estadosFerramentas) {
+
+        if (!Double.isFinite(saude) || saude < 0.0 || saude > 100.0 || historicoFalhas < 0) {
+
+        throw new EntradaInvalidaException( "Estado inválido da máquina.");
+        }
+
+        if (estadosFerramentas == null || estadosFerramentas.size() != ferramentas.size()) {
+
+        throw new EntradaInvalidaException("Quantidade de ferramentas incompatível.");
+        }
+
+        if (!Double.isFinite(temperaturaMotor) ||temperaturaMotor < 25.0 || temperaturaMotor > 120.0 || !Double.isFinite(desgasteMotor) || desgasteMotor < 0.0 || desgasteMotor > 100.0 ||!Double.isFinite(calibracaoSensor) || calibracaoSensor < 0.0 || calibracaoSensor > 100.0) {
+
+        throw new EntradaInvalidaException("Estado inválido dos componentes.");
+        }
+
+        for (int i = 0; i < ferramentas.size(); i++) {
+            EstadoFerramenta estado = estadosFerramentas.get(i);
+
+            if (estado == null || !ferramentas.get(i).getNome().equals(estado.nome()) ||!Double.isFinite(estado.desgaste()) || estado.desgaste() < 0.0 || estado.desgaste() > 100.0) {
+                throw new EntradaInvalidaException("Estado inválido das ferramentas.");
+        }
+        }
+
+        motor.restaurarEstado(temperaturaMotor, desgasteMotor);
+        sensor.restaurarEstado(calibracaoSensor);
+
+        for (int i = 0; i < ferramentas.size(); i++) {
+            ferramentas.get(i).restaurarEstado(estadosFerramentas.get(i).desgaste());
+        }
+
+        this.saude = saude;
+        this.historicoFalhas = historicoFalhas;
+    }
 }
