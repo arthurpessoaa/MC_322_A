@@ -111,4 +111,21 @@ public class FerramentaDeTrabalho implements Auditavel {
     public boolean precisaManutencao() {
         return estaGasta();
     }
+    /**
+    * Retorna o nome da ferramenta.
+    *
+    * @return nome da ferramenta
+    */
+    public String getNome() {
+        return nome;
+    }       
+
+    /**
+    * Retorna o desgaste atual da ferramenta.
+    *
+     * @return desgaste atual da ferramenta
+     */
+    public double getDesgaste() {
+        return desgaste;
+    }
 }

@@ -1,9 +1,12 @@
 package producao;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import auditoria.Auditavel;
+import estrategias.EstrategiaProducao;
 import excecoes.DemandaInvalidaException;
 import excecoes.EntradaInvalidaException;
 import excecoes.MaquinaIndisponivelException;
@@ -17,9 +20,6 @@ import produtos.LinhaProduto;
 import produtos.LinhaStudio;
 import produtos.Produto;
 import produtos.StatusProduto;
-
-import estrategias.EstrategiaProducao;
-import auditoria.Auditavel;
 
 /**
  * Núcleo da planta industrial: gerencia demandas, estoque de matéria-prima, a
@@ -672,5 +672,33 @@ public class GerenciadorProducao {
      */
     public Cenario getCenario(){
         return cenario;
+    }
+
+    /**
+    * Retorna as matérias-primas cadastradas na fábrica.
+    */
+    public List<MateriaPrima> getMateriasPrimas() {
+        return Collections.unmodifiableList(materiasPrimas);
+    }
+
+    /**
+    * Retorna as demandas registradas.
+    */
+    public List<Demanda> getDemandas() {
+        return Collections.unmodifiableList(demandas);
+    }
+
+    /**
+     * Retorna a linha de produção da fábrica.
+     */
+    public LinhaDeProducao getLinha() {
+        return linha;
+    }
+
+    /**
+    * Retorna o orçamento atual da fábrica.
+    */
+    public double getBudget() {
+        return budget;
     }
 }

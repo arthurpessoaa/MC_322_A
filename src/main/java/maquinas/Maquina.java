@@ -5,10 +5,10 @@ import java.util.List;
 import java.util.Random;
 
 import auditoria.Auditavel;
-import excecoes.EntradaInvalidaException;
 import componentes.FerramentaDeTrabalho;
 import componentes.MotorDeAcionamento;
 import componentes.SensorDeVibracao;
+import excecoes.EntradaInvalidaException;
 import excecoes.MaquinaIndisponivelException;
 import produtos.Produto;
 
@@ -484,5 +484,58 @@ public abstract class Maquina implements Auditavel {
      */
     public double getCapacidadeMaxima() { 
         return capacidadeMaxima; 
+    }
+
+    /**
+    * Consulta o desgaste do motor interno da máquina.
+    * Preserva o encapsulamento, pois não retorna o objeto motor.
+    *
+     * @return desgaste atual do motor
+    */
+    public double lerDesgasteMotor() {
+        return motor.getDesgaste();
+    }
+
+    /**
+    * Representa os dados de uma ferramenta utilizados na persistência.
+    * Não expõe o objeto FerramentaDeTrabalho original.
+    *
+    * @param nome nome da ferramenta
+    * @param desgaste desgaste atual da ferramenta
+    */
+    public record EstadoFerramenta(String nome, double desgaste) {}
+
+    /**
+    * Retorna os estados das ferramentas da máquina.
+   * Cria uma representação independente para cada ferramenta,
+     * sem expor diretamente a lista ou os objetos internos.
+     *
+     * @return lista imutável com os estados das ferramentas
+     */
+    public List<EstadoFerramenta> consultarFerramentas() {
+
+        List<EstadoFerramenta> estados = new ArrayList<>();
+
+        // Percorre as ferramentas que pertencem à máquina.
+        for (FerramentaDeTrabalho ferramenta : ferramentas) {
+
+            // Cria uma representação dos dados da ferramenta.
+            estados.add(new EstadoFerramenta(ferramenta.getNome(),ferramenta.getDesgaste()));
+            
+    }
+
+    // Retorna uma lista que não pode ser modificada externamente.
+    return List.copyOf(estados);
+    }
+
+    /**
+    * Retorna a probabilidade-base de falha da máquina.
+    * Esse valor será utilizado para reconstruir a configuração
+    * original da máquina durante o carregamento do XML.
+    *
+    * @return probabilidade-base de falha
+    */
+    public double getProbabilidadeFalhaBase() {
+        return probabilidadeFalha;
     }
 }

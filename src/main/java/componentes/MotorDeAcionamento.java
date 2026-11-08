@@ -145,4 +145,14 @@ public class MotorDeAcionamento implements Auditavel {
     public boolean precisaManutencao() {
         return estaQuebrado() || estaSuperaquecido() || desgaste >= LIMITE_MANUTENCAO;
     }
+
+    /**
+    * Retorna o desgaste atual do motor.
+    * Permite consultar esse valor sem expor o objeto internamente.
+    *
+    * @return desgaste atual do motor
+    */
+    public double getDesgaste() {
+        return desgaste;
+    }
 }
