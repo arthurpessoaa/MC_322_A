@@ -2,3 +2,4 @@ bin/
 *.class
 .gradle/
 build/
+dados/
