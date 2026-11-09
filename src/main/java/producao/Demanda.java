@@ -173,6 +173,19 @@ public class Demanda {
     }
 
     /**
+     * Restaura o status da demanda a partir de um valor recuperado do XML.
+     *
+     * @param statusRecuperado status salvo
+     * @throws DemandaInvalidaException se o status for nulo
+     */
+    public void restaurarStatus(StatusDemanda statusRecuperado) {
+        if (statusRecuperado == null) {
+            throw new DemandaInvalidaException("O status da demanda não pode ser nulo.");
+        }
+        this.status = statusRecuperado;
+    }
+
+    /**
      * Linha de produto pedida.
      *
      * @return linha de produto

@@ -666,6 +666,23 @@ public class GerenciadorProducao {
     }
 
     /**
+     * Restaura o orçamento e as demandas recuperados de um arquivo de persistência.
+     * Substitui as demandas atuais, sem combiná-las com as recuperadas.
+     *
+     * @param budgetRecuperado orçamento salvo (finito e não negativo)
+     * @param demandasRecuperadas demandas salvas
+     * @throws EntradaInvalidaException se o orçamento ou a lista de demandas forem inválidos
+     */
+    public void restaurarEstado(double budgetRecuperado, List<Demanda> demandasRecuperadas) {
+        if (!Double.isFinite(budgetRecuperado) || budgetRecuperado < 0 || demandasRecuperadas == null) {
+            throw new EntradaInvalidaException("Estado inválido do gerenciador de produção.");
+        }
+
+        this.budget = budgetRecuperado;
+        this.demandas = new ArrayList<>(demandasRecuperadas);
+    }
+
+    /**
      * Cenário de operação escolhido no início da execução.
      *
      * @return cenário atual

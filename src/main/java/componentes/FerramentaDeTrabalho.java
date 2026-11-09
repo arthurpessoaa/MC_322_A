@@ -90,6 +90,20 @@ public class FerramentaDeTrabalho implements Auditavel {
     }
 
     /**
+     * Restaura o desgaste da ferramenta a partir de um valor recuperado do XML.
+     *
+     * @param desgaste desgaste recuperado (entre 0 e 100)
+     * @throws EntradaInvalidaException se o valor estiver fora do intervalo
+     */
+    public void restaurarEstado(double desgaste) {
+        if (!Double.isFinite(desgaste) || desgaste < 0.0 || desgaste > DESGASTE_MAXIMO) {
+            throw new EntradaInvalidaException("Estado inválido da ferramenta.");
+        }
+        
+        this.desgaste = desgaste;
+    }
+
+    /**
      * Gera o diagnóstico atual do componente. Componentes simples devolvem uma única linha;
      * componentes compostos devolvem um texto hierárquico e indentado, com uma linha para o
      * próprio componente seguida do diagnóstico de cada uma de suas partes.
@@ -111,18 +125,19 @@ public class FerramentaDeTrabalho implements Auditavel {
     public boolean precisaManutencao() {
         return estaGasta();
     }
-    /**
-    * Retorna o nome da ferramenta.
-    *
-    * @return nome da ferramenta
-    */
-    public String getNome() {
-        return nome;
-    }       
 
     /**
-    * Retorna o desgaste atual da ferramenta.
-    *
+     * Retorna o nome da ferramenta.
+     *
+     * @return nome da ferramenta
+     */
+    public String getNome() {
+        return nome;
+    }
+
+    /**
+     * Retorna o desgaste atual da ferramenta.
+     *
      * @return desgaste atual da ferramenta
      */
     public double getDesgaste() {

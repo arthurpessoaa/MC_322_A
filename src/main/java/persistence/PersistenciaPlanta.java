@@ -1,277 +1,382 @@
 package persistence;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
+import javax.xml.parsers.SAXParserFactory;
+import javax.xml.transform.sax.SAXSource;
 
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.XMLReader;
 
+import excecoes.FabricaException;
+import excecoes.PersistenciaException;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.JAXBException;
+import jakarta.xml.bind.Marshaller;
+import jakarta.xml.bind.Unmarshaller;
+import maquinas.LinhaDeProducao;
 import maquinas.Maquina;
 import maquinas.MaquinaEmbalagem;
 import maquinas.MaquinaInspecaoSonora;
 import maquinas.MaquinaMontagem;
+import persistence.PlantaXml.ConfiguracaoXml;
+import persistence.PlantaXml.DemandaXml;
+import persistence.PlantaXml.FerramentaXml;
+import persistence.PlantaXml.MaquinaXml;
+import persistence.PlantaXml.MateriaPrimaXml;
+import persistence.PlantaXml.MotorXml;
+import persistence.PlantaXml.SensorXml;
+import producao.Cenario;
 import producao.Demanda;
 import producao.GerenciadorProducao;
 import producao.MateriaPrima;
+import producao.StatusDemanda;
+import produtos.Instrumento;
+import produtos.LinhaProduto;
 
-/** Responsável pela escrita e leitura do estado da planta industrial em XML. */
+/**
+ * Responsável pela escrita e leitura do estado da planta industrial em XML, usando
+ * Jakarta XML Binding (marshalling e unmarshalling).
+ * <p>
+ * As entidades de domínio não conhecem o XML: o estado da fábrica é copiado para as classes de
+ * {@link PlantaXml} (marshalling) e, na leitura, o XML é convertido de volta em objetos de domínio
+ * somente depois de validado (unmarshalling). Persiste configuração (cenário, orçamento e nome da
+ * linha), estoque, máquinas com seus componentes e demandas com seus status. Uma falha de
+ * carregamento nunca altera a planta que estava em uso.
+ * </p>
+ *
+ * @author Arthur Lopes Pessoa
+ */
 public class PersistenciaPlanta {
 
-    /** Adiciona um elemento com conteúdo textual a outro elemento XML. */
-    private void adicionarElemento(Document documento, Element elementoPrincipal,
-                                   String nome, String valor) {
-        Element elemento = documento.createElement(nome);
-        elemento.setTextContent(valor);
-        elementoPrincipal.appendChild(elemento);
-    }
-
-    /** Salva o estoque, as máquinas e as demandas da fábrica em um arquivo XML. */
-    public void salvar(GerenciadorProducao gerenciador, Path arquivo) throws IOException {
-        try {
-            Document documento = DocumentBuilderFactory.newInstance()
-                    .newDocumentBuilder().newDocument();
-            Element raiz = documento.createElement("planta");
-            documento.appendChild(raiz);
-
-            Element estoque = documento.createElement("materiasPrimas");
-            raiz.appendChild(estoque);
-
-            for (MateriaPrima materia : gerenciador.getMateriasPrimas()) {
-                Element elemento = documento.createElement("materiaPrima");
-                estoque.appendChild(elemento);
-                adicionarElemento(documento, elemento, "id", materia.getId());
-                adicionarElemento(documento, elemento, "nome", materia.getNome());
-                adicionarElemento(documento, elemento, "quantidade",
-                        String.valueOf(materia.getQuantidade()));
-                adicionarElemento(documento, elemento, "unidade", materia.getUnidade());
-                adicionarElemento(documento, elemento, "custoPorUnidade",
-                        String.valueOf(materia.getCustoPorUnidade()));
-            }
-
-            Element maquinas = documento.createElement("maquinas");
-            raiz.appendChild(maquinas);
-
-            for (Maquina maquina : gerenciador.getLinha().getMaquinas()) {
-                Element elementoMaquina = documento.createElement("maquina");
-                maquinas.appendChild(elementoMaquina);
-
-                adicionarElemento(documento, elementoMaquina, "tipo", maquina.getTipo());
-                adicionarElemento(documento, elementoMaquina, "nome", maquina.getNome());
-                adicionarElemento(documento, elementoMaquina, "ligada",
-                        String.valueOf(maquina.estaLigada()));
-                adicionarElemento(documento, elementoMaquina, "saude",
-                        String.valueOf(maquina.getSaude()));
-                adicionarElemento(documento, elementoMaquina, "capacidadeMaxima",
-                        String.valueOf(maquina.getCapacidadeMaxima()));
-                adicionarElemento(documento, elementoMaquina, "custoOperacao",
-                        String.valueOf(maquina.getCustoOperacao()));
-                adicionarElemento(documento, elementoMaquina, "historicoFalhas",
-                        String.valueOf(maquina.getHistoricoFalhas()));
-                adicionarElemento(documento, elementoMaquina, "probabilidadeFalha",
-                        String.valueOf(maquina.getProbabilidadeFalhaBase()));
-
-                Element motor = documento.createElement("motor");
-                elementoMaquina.appendChild(motor);
-                adicionarElemento(documento, motor, "temperatura",
-                        String.valueOf(maquina.lerTemperaturaMotor()));
-                adicionarElemento(documento, motor, "desgaste",
-                        String.valueOf(maquina.lerDesgasteMotor()));
-
-                Element sensor = documento.createElement("sensor");
-                elementoMaquina.appendChild(sensor);
-                adicionarElemento(documento, sensor, "calibracao",
-                        String.valueOf(maquina.lerCalibracaoSensor()));
-
-                Element ferramentas = documento.createElement("ferramentas");
-                elementoMaquina.appendChild(ferramentas);
-
-                for (Maquina.EstadoFerramenta estado : maquina.consultarFerramentas()) {
-                    Element ferramenta = documento.createElement("ferramenta");
-                    ferramentas.appendChild(ferramenta);
-                    adicionarElemento(documento, ferramenta, "nome", estado.nome());
-                    adicionarElemento(documento, ferramenta, "desgaste",
-                            String.valueOf(estado.desgaste()));
-                }
-            }
-
-            Element demandas = documento.createElement("demandas");
-            raiz.appendChild(demandas);
-
-            for (Demanda demanda : gerenciador.getDemandas()) {
-                Element elementoDemanda = documento.createElement("demanda");
-                demandas.appendChild(elementoDemanda);
-                adicionarElemento(documento, elementoDemanda, "linha",
-                        demanda.getLinha().name());
-                adicionarElemento(documento, elementoDemanda, "instrumento",
-                        demanda.getInstrumento().name());
-                adicionarElemento(documento, elementoDemanda, "quantidadeProdutos",
-                        String.valueOf(demanda.getQuantidadeProdutos()));
-                adicionarElemento(documento, elementoDemanda, "status",
-                        demanda.getStatus().name());
-            }
-
-            escreverArquivo(documento, arquivo);
-        } catch (ParserConfigurationException e) {
-            throw new IOException("Erro ao criar o documento XML.", e);
+    /**
+     * Salva o estado da fábrica em um arquivo XML. A escrita é feita em um arquivo temporário
+     * e só depois substitui o arquivo final, preservando os dados anteriores se algo falhar.
+     *
+     * @param gerenciador fábrica a ser salva
+     * @param arquivo caminho do XML de destino
+     * @throws PersistenciaException se não for possível escrever o arquivo
+     */
+    public void salvar(GerenciadorProducao gerenciador, Path arquivo) {
+        if (gerenciador == null || arquivo == null) {
+            throw new PersistenciaException("Não há planta ou arquivo de destino para salvar.");
         }
-    }
 
-    /** Grava um documento DOM em XML no caminho especificado. */
-    private void escreverArquivo(Document documento, Path arquivo) throws IOException {
-        Path pasta = arquivo.toAbsolutePath().getParent();
-        if (pasta != null) {
-            Files.createDirectories(pasta);
-        }
+        PlantaXml planta = paraXml(gerenciador);
+
+        Path absoluto = arquivo.toAbsolutePath();
+        Path temporario = absoluto.resolveSibling(absoluto.getFileName() + ".tmp");
+
         try {
-            Transformer transformer = TransformerFactory.newInstance().newTransformer();
-            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-            transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
-            transformer.transform(new DOMSource(documento),
-                    new StreamResult(arquivo.toFile()));
-        } catch (TransformerException e) {
-            throw new IOException("Erro ao escrever arquivo XML.", e);
+            Files.createDirectories(absoluto.getParent());
+
+            Marshaller marshaller = JAXBContext.newInstance(PlantaXml.class).createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            marshaller.marshal(planta, temporario.toFile());
+
+            Files.move(temporario, absoluto, StandardCopyOption.REPLACE_EXISTING);
+        } catch (JAXBException | IOException e) {
+            try {
+                Files.deleteIfExists(temporario);
+            } catch (IOException ignorada) {
+                // nada a fazer: o arquivo temporário é apenas lixo
+            }
+            throw new PersistenciaException("Não foi possível salvar o arquivo: " + absoluto, e);
         }
     }
 
     /**
-     * Lê o XML e prepara os objetos que serão utilizados na reconstrução da fábrica.
-     * Ainda falta restaurar componentes e demandas e construir o gerenciador final.
+     * Lê o XML, valida os dados e reconstrói a fábrica (estoque, máquinas e componentes,
+     * orçamento, cenário e demandas). Nada é devolvido se qualquer dado for inválido.
      *
      * @param arquivo caminho do XML
-     * @return gerenciador recuperado, quando a implementação estiver concluída
-     * @throws IOException se houver erro de leitura ou dados inválidos
+     * @return gerenciador recuperado
+     * @throws PersistenciaException se o arquivo não existir, estiver vazio, corrompido,
+     *                               não puder ser lido ou tiver dados incompatíveis com o domínio
      */
-    public GerenciadorProducao carregar(Path arquivo) throws IOException {
-        if (!Files.exists(arquivo)) {
-            throw new IOException("Arquivo de persistência não encontrado.");
-        }
-        if (Files.size(arquivo) == 0) {
-            throw new IOException("O arquivo de persistência está vazio.");
+    public GerenciadorProducao carregar(Path arquivo) {
+        if (arquivo == null || !Files.exists(arquivo)) {
+            throw new PersistenciaException("Arquivo de persistência não encontrado.");
         }
 
         try {
-            DocumentBuilderFactory fabrica = DocumentBuilderFactory.newInstance();
-            fabrica.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            fabrica.setFeature("http://xml.org/sax/features/external-general-entities", false);
-            fabrica.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-            fabrica.setXIncludeAware(false);
-            fabrica.setExpandEntityReferences(false);
-            DocumentBuilder builder = fabrica.newDocumentBuilder();
-            Document documento = builder.parse(arquivo.toFile());
-            Element raiz = documento.getDocumentElement();
-
-            if (raiz == null || !raiz.getTagName().equals("planta")) {
-                throw new IOException("Estrutura XML inválida.");
+            if (Files.size(arquivo) == 0) {
+                throw new PersistenciaException("O arquivo de persistência está vazio.");
             }
 
-            NodeList secoesEstoque = raiz.getElementsByTagName("materiasPrimas");
-            if (secoesEstoque.getLength() != 1) {
-                throw new IOException("Seção de matérias-primas inválida.");
-            }
-            Element estoque = (Element) secoesEstoque.item(0);
-            NodeList elementosMateria = estoque.getElementsByTagName("materiaPrima");
-            List<MateriaPrima> materiasRecuperadas = new ArrayList<>();
+            return deXml(lerXml(arquivo));
 
-            for (int i = 0; i < elementosMateria.getLength(); i++) {
-                Element elemento = (Element) elementosMateria.item(i);
-                String id = lerTexto(elemento, "id");
-                String nome = lerTexto(elemento, "nome");
-                String unidade = lerTexto(elemento, "unidade");
-                double quantidade = lerDouble(elemento, "quantidade");
-                double custo = lerDouble(elemento, "custoPorUnidade");
-                if (quantidade < 0 || custo < 0) {
-                    throw new IOException("Quantidade ou custo inválido: " + id);
-                }
-                materiasRecuperadas.add(new MateriaPrima(id, nome, quantidade, unidade, custo));
-            }
-
-            NodeList secoesMaquinas = raiz.getElementsByTagName("maquinas");
-            if (secoesMaquinas.getLength() != 1) {
-                throw new IOException("Seção de máquinas inválida.");
-            }
-            Element elementoMaquinas = (Element) secoesMaquinas.item(0);
-            NodeList listaMaquinas = elementoMaquinas.getElementsByTagName("maquina");
-            List<Maquina> maquinasRecuperadas = new ArrayList<>();
-
-            for (int i = 0; i < listaMaquinas.getLength(); i++) {
-                Element elementoMaquina = (Element) listaMaquinas.item(i);
-                String tipo = lerTexto(elementoMaquina, "tipo");
-                String nome = lerTexto(elementoMaquina, "nome");
-                String valorLigada = lerTexto(elementoMaquina, "ligada");
-                if (!valorLigada.equals("true") && !valorLigada.equals("false")) {
-                    throw new IOException("Estado inválido da máquina: " + nome);
-                }
-                boolean ligada = Boolean.parseBoolean(valorLigada);
-                double capacidade = lerDouble(elementoMaquina, "capacidadeMaxima");
-                double probabilidade = lerDouble(elementoMaquina, "probabilidadeFalha");
-                double custo = lerDouble(elementoMaquina, "custoOperacao");
-                if (capacidade <= 0 || probabilidade < 0 || probabilidade > 1 || custo < 0) {
-                    throw new IOException("Configuração inválida da máquina: " + nome);
-                }
-
-                Maquina maquina;
-                switch (tipo) {
-                    case "Maquina de Montagem":
-                        maquina = new MaquinaMontagem(nome, ligada, capacidade, probabilidade, custo);
-                        break;
-                    case "Maquina de Embalagem":
-                        maquina = new MaquinaEmbalagem(nome, ligada, capacidade, probabilidade, custo);
-                        break;
-                    case "Máquina de Inspeção Sonora":
-                        maquina = new MaquinaInspecaoSonora(nome, ligada, capacidade, probabilidade, custo);
-                        break;
-                    default:
-                        throw new IOException("Tipo de máquina inválido: " + tipo);
-                }
-
-                maquinasRecuperadas.add(maquina);
-            }
-
-            throw new UnsupportedOperationException(
-                    "Carregamento ainda incompleto: faltam estados dos componentes, demandas e gerenciador.");
-        } catch (ParserConfigurationException | SAXException | IllegalArgumentException e) {
-            throw new IOException("Erro ao interpretar arquivo XML.", e);
+        } catch (PersistenciaException e) {
+            throw e;
+        } catch (FabricaException e) {
+            throw new PersistenciaException(
+                    "Dados incompatíveis com as regras do domínio: " + e.getMessage(), e);
+        } catch (IOException e) {
+            throw new PersistenciaException("Falha ao ler o arquivo de persistência.", e);
         }
     }
 
-    /** Lê o texto obrigatório de uma tag, rejeitando ausências e repetições. */
-    private String lerTexto(Element elementoPrincipal, String nomeTag) throws IOException {
-        NodeList elementos = elementoPrincipal.getElementsByTagName(nomeTag);
-        if (elementos.getLength() != 1) {
-            throw new IOException("Tag XML inválida: " + nomeTag);
+    /** Converte o arquivo XML em {@link PlantaXml}, recusando DOCTYPE e qualquer erro de formato. */
+    private PlantaXml lerXml(Path arquivo) throws IOException {
+        try (InputStream entrada = Files.newInputStream(arquivo)) {
+            SAXParserFactory fabrica = SAXParserFactory.newInstance();
+            fabrica.setNamespaceAware(true);
+            fabrica.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            fabrica.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            fabrica.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            XMLReader leitor = fabrica.newSAXParser().getXMLReader();
+
+            Unmarshaller unmarshaller = JAXBContext.newInstance(PlantaXml.class).createUnmarshaller();
+            // Por padrão o JAXB ignora valores inválidos (ex.: texto em campo numérico);
+            // aqui qualquer problema interrompe a leitura.
+            unmarshaller.setEventHandler(evento -> false);
+
+            Object lido = unmarshaller.unmarshal(new SAXSource(leitor, new InputSource(entrada)));
+            if (!(lido instanceof PlantaXml planta)) {
+                throw new PersistenciaException("Estrutura XML inválida: raiz deve ser <planta>.");
+            }
+            return planta;
+        } catch (JAXBException | SAXException e) {
+            throw new PersistenciaException("Arquivo XML corrompido ou com formato inválido.", e);
+        } catch (ParserConfigurationException e) {
+            throw new PersistenciaException("Erro ao configurar a leitura do XML.", e);
         }
-        String valor = elementos.item(0).getTextContent();
+    }
+
+    /** Copia o estado da fábrica para a representação XML. */
+    private PlantaXml paraXml(GerenciadorProducao gerenciador) {
+        PlantaXml planta = new PlantaXml();
+
+        planta.configuracao = new ConfiguracaoXml();
+        planta.configuracao.cenario = gerenciador.getCenario().name();
+        planta.configuracao.budget = gerenciador.getBudget();
+        planta.configuracao.nomeLinha = gerenciador.getLinha().getNome();
+
+        planta.materiasPrimas = new ArrayList<>();
+        for (MateriaPrima materia : gerenciador.getMateriasPrimas()) {
+            MateriaPrimaXml xml = new MateriaPrimaXml();
+            xml.id = materia.getId();
+            xml.nome = materia.getNome();
+            xml.quantidade = materia.getQuantidade();
+            xml.unidade = materia.getUnidade();
+            xml.custoPorUnidade = materia.getCustoPorUnidade();
+            planta.materiasPrimas.add(xml);
+        }
+
+        planta.maquinas = new ArrayList<>();
+        for (Maquina maquina : gerenciador.getLinha().getMaquinas()) {
+            MaquinaXml xml = new MaquinaXml();
+            xml.tipo = maquina.getTipo();
+            xml.nome = maquina.getNome();
+            xml.ligada = maquina.estaLigada();
+            xml.saude = maquina.getSaude();
+            xml.capacidadeMaxima = maquina.getCapacidadeMaxima();
+            xml.custoOperacao = maquina.getCustoOperacao();
+            xml.historicoFalhas = maquina.getHistoricoFalhas();
+            xml.probabilidadeFalha = maquina.getProbabilidadeFalhaBase();
+
+            xml.motor = new MotorXml();
+            xml.motor.temperatura = maquina.lerTemperaturaMotor();
+            xml.motor.desgaste = maquina.lerDesgasteMotor();
+
+            xml.sensor = new SensorXml();
+            xml.sensor.calibracao = maquina.lerCalibracaoSensor();
+
+            xml.ferramentas = new ArrayList<>();
+            for (Maquina.EstadoFerramenta estado : maquina.consultarFerramentas()) {
+                FerramentaXml ferramenta = new FerramentaXml();
+                ferramenta.nome = estado.nome();
+                ferramenta.desgaste = estado.desgaste();
+                xml.ferramentas.add(ferramenta);
+            }
+
+            planta.maquinas.add(xml);
+        }
+
+        planta.demandas = new ArrayList<>();
+        for (Demanda demanda : gerenciador.getDemandas()) {
+            DemandaXml xml = new DemandaXml();
+            xml.linha = demanda.getLinha().name();
+            xml.instrumento = demanda.getInstrumento().name();
+            xml.quantidadeProdutos = demanda.getQuantidadeProdutos();
+            xml.status = demanda.getStatus().name();
+            planta.demandas.add(xml);
+        }
+
+        return planta;
+    }
+
+    /** Valida a representação XML e reconstrói a fábrica. */
+    private GerenciadorProducao deXml(PlantaXml planta) {
+        ConfiguracaoXml configuracao = exigir(planta.configuracao, "configuracao");
+        Cenario cenario = lerEnum(Cenario.class, configuracao.cenario, "cenario");
+        double budget = exigir(configuracao.budget, "budget");
+        if (!Double.isFinite(budget) || budget < 0) {
+            throw new PersistenciaException("Orçamento inválido no arquivo.");
+        }
+        String nomeLinha = exigirTexto(configuracao.nomeLinha, "nomeLinha");
+
+        ArrayList<MateriaPrima> materias = lerMateriasPrimas(vazioSeNulo(planta.materiasPrimas));
+        LinhaDeProducao linha = lerLinha(vazioSeNulo(planta.maquinas), nomeLinha);
+        List<Demanda> demandas = lerDemandas(vazioSeNulo(planta.demandas));
+
+        GerenciadorProducao gerenciador = new GerenciadorProducao(linha, materias, cenario);
+        gerenciador.restaurarEstado(budget, demandas);
+        return gerenciador;
+    }
+
+    /** Converte o estoque, rejeitando ids repetidos e valores negativos. */
+    private ArrayList<MateriaPrima> lerMateriasPrimas(List<MateriaPrimaXml> lista) {
+        ArrayList<MateriaPrima> materias = new ArrayList<>();
+        Set<String> idsVistos = new HashSet<>();
+
+        for (MateriaPrimaXml xml : lista) {
+            String id = exigirTexto(xml.id, "id");
+            String nome = exigirTexto(xml.nome, "nome");
+            String unidade = exigirTexto(xml.unidade, "unidade");
+            double quantidade = lerNumero(xml.quantidade, "quantidade");
+            double custo = lerNumero(xml.custoPorUnidade, "custoPorUnidade");
+
+            if (quantidade < 0 || custo < 0) {
+                throw new PersistenciaException("Quantidade ou custo inválido: " + id);
+            }
+            if (!idsVistos.add(id)) {
+                throw new PersistenciaException("Matéria-prima repetida: " + id);
+            }
+
+            materias.add(new MateriaPrima(id, nome, quantidade, unidade, custo));
+        }
+
+        return materias;
+    }
+
+    /** Converte as máquinas e seus componentes, remontando a linha de produção. */
+    private LinhaDeProducao lerLinha(List<MaquinaXml> lista, String nomeLinha) {
+        LinhaDeProducao linha = new LinhaDeProducao(nomeLinha);
+
+        for (MaquinaXml xml : lista) {
+            String tipo = exigirTexto(xml.tipo, "tipo");
+            String nome = exigirTexto(xml.nome, "nome");
+            boolean ligada = exigir(xml.ligada, "ligada");
+            double capacidade = lerNumero(xml.capacidadeMaxima, "capacidadeMaxima");
+            double probabilidade = lerNumero(xml.probabilidadeFalha, "probabilidadeFalha");
+            double custo = lerNumero(xml.custoOperacao, "custoOperacao");
+
+            if (capacidade <= 0 || probabilidade < 0 || probabilidade > 1 || custo < 0) {
+                throw new PersistenciaException("Configuração inválida da máquina: " + nome);
+            }
+
+            Maquina maquina;
+            switch (tipo) {
+                case "Maquina de Montagem":
+                    maquina = new MaquinaMontagem(nome, ligada, capacidade, probabilidade, custo);
+                    break;
+                case "Maquina de Embalagem":
+                    maquina = new MaquinaEmbalagem(nome, ligada, capacidade, probabilidade, custo);
+                    break;
+                case "Máquina de Inspeção Sonora":
+                    maquina = new MaquinaInspecaoSonora(nome, ligada, capacidade, probabilidade, custo);
+                    break;
+                default:
+                    throw new PersistenciaException("Tipo de máquina inválido: " + tipo);
+            }
+
+            MotorXml motor = exigir(xml.motor, "motor");
+            SensorXml sensor = exigir(xml.sensor, "sensor");
+
+            List<Maquina.EstadoFerramenta> estadosFerramentas = new ArrayList<>();
+            for (FerramentaXml ferramenta : vazioSeNulo(xml.ferramentas)) {
+                estadosFerramentas.add(new Maquina.EstadoFerramenta(
+                        exigirTexto(ferramenta.nome, "nome da ferramenta"),
+                        lerNumero(ferramenta.desgaste, "desgaste da ferramenta")));
+            }
+
+            // Valida e restaura saúde, falhas, motor, sensor e ferramentas (composição)
+            maquina.restaurarEstado(
+                    lerNumero(xml.saude, "saude"),
+                    exigir(xml.historicoFalhas, "historicoFalhas"),
+                    lerNumero(motor.temperatura, "temperatura"),
+                    lerNumero(motor.desgaste, "desgaste do motor"),
+                    lerNumero(sensor.calibracao, "calibracao"),
+                    estadosFerramentas);
+
+            linha.adicionarMaquina(maquina);
+        }
+
+        return linha;
+    }
+
+    /** Converte as demandas e seus status, rejeitando duplicatas de linha e instrumento. */
+    private List<Demanda> lerDemandas(List<DemandaXml> lista) {
+        List<Demanda> demandas = new ArrayList<>();
+        Set<String> chavesVistas = new HashSet<>();
+
+        for (DemandaXml xml : lista) {
+            LinhaProduto linha = lerEnum(LinhaProduto.class, xml.linha, "linha");
+            Instrumento instrumento = lerEnum(Instrumento.class, xml.instrumento, "instrumento");
+            int quantidade = exigir(xml.quantidadeProdutos, "quantidadeProdutos");
+            StatusDemanda status = lerEnum(StatusDemanda.class, xml.status, "status");
+
+            if (!chavesVistas.add(linha + "/" + instrumento)) {
+                throw new PersistenciaException(
+                        "Demanda repetida: " + instrumento.getNome() + " (" + linha.getNome() + ")");
+            }
+
+            Demanda demanda = new Demanda(linha, quantidade, instrumento);
+            demanda.restaurarStatus(status);
+            demandas.add(demanda);
+        }
+
+        return demandas;
+    }
+
+    /** Lista ausente no XML equivale a lista vazia (ex.: nenhuma demanda registrada). */
+    private <T> List<T> vazioSeNulo(List<T> lista) {
+        return lista == null ? new ArrayList<>() : lista;
+    }
+
+    /** Garante que um elemento obrigatório está presente. */
+    private <T> T exigir(T valor, String nome) {
+        if (valor == null) {
+            throw new PersistenciaException("Tag XML ausente ou vazia: " + nome);
+        }
+        return valor;
+    }
+
+    /** Garante que um texto obrigatório está presente e não está em branco. */
+    private String exigirTexto(String valor, String nome) {
         if (valor == null || valor.isBlank()) {
-            throw new IOException("Valor vazio na tag: " + nomeTag);
+            throw new PersistenciaException("Valor vazio na tag: " + nome);
         }
         return valor.trim();
     }
 
-    /** Recupera um número double obrigatório e finito. */
-    private double lerDouble(Element elemento, String nomeTag) throws IOException {
+    /** Garante que um número obrigatório está presente e é finito. */
+    private double lerNumero(Double valor, String nome) {
+        double numero = exigir(valor, nome);
+        if (!Double.isFinite(numero)) {
+            throw new PersistenciaException("Número não finito na tag: " + nome);
+        }
+        return numero;
+    }
+
+    /** Converte o nome de uma constante de enum, rejeitando valores desconhecidos. */
+    private <E extends Enum<E>> E lerEnum(Class<E> tipo, String valor, String nome) {
+        String texto = exigirTexto(valor, nome);
         try {
-            double valor = Double.parseDouble(lerTexto(elemento, nomeTag));
-            if (!Double.isFinite(valor)) {
-                throw new IOException("Número não finito na tag: " + nomeTag);
-            }
-            return valor;
-        } catch (NumberFormatException e) {
-            throw new IOException("Número inválido na tag: " + nomeTag, e);
+            return Enum.valueOf(tipo, texto);
+        } catch (IllegalArgumentException e) {
+            throw new PersistenciaException("Valor desconhecido em <" + nome + ">: " + texto, e);
         }
     }
 }
