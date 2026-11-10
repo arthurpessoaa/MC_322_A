@@ -55,3 +55,14 @@ resultado: motor superaquecido ou sensor descalibrado aumentam a chance de falha
 pioram o instrumento. As máquinas ficam numa linha de produção, que é só uma agregação, já que a máquina
 existe fora da linha e poderia ir para outra. Pela Lei de Deméter, ninguém de fora acessa as partes.
 O diagrama UML está em docs/uml.
+
+PERSISTÊNCIA EM XML E TESTES COM JUNIT (TAREFA 6)
+ 
+Nessa etapa a planta passou a poder ser salva e carregada em XML, pelo menu. Escolhi guardar o que muda
+durante o uso e é preciso para retomar a fábrica de onde parou: estoque, máquinas com motor, sensor e
+ferramentas, demandas com status, orçamento e cenário. A estratégia ativa e os produtos já fabricados ficam
+só em memória, para o arquivo não ficar maior do que o necessário. A leitura valida tudo antes de trocar a
+planta atual, então um arquivo ruim só mostra o motivo e nunca estraga a fábrica em uso. Como a máquina cria
+suas próprias partes, ao carregar ela é recriada e só depois o estado de cada parte é restaurado. Os testes
+com JUnit cobrem as regras de negócio, os erros e o salvar/carregar, usando arquivos temporários para não
+mexer nos dados reais.
