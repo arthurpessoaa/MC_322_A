@@ -11,6 +11,7 @@ No Linux / macOS:
 ./gradlew build    # Compila
 ./gradlew run      # Executa
 ./gradlew javadoc  # Gera a documentação 
+./gradlew test  # Testes
 ```
 
 No windows
@@ -18,7 +19,11 @@ No windows
 gradlew.bat build
 gradlew.bat run
 gradlew.bat javadoc
+./gradlew test
 ```
+
+## local do relatorio 
+build/reports/tests/test/index.html
 
 ## Escopo e Limitações
 
