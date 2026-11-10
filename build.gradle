@@ -41,3 +41,12 @@ tasks.named('run') {
     // Para não dar problema nos acentos:
     jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8'
 }
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "failed", "skipped"
+        showStandardStreams = false
+        exceptionFormat "full"
+    }
+}
